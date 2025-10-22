@@ -1,27 +1,19 @@
-// Imports -------------------------------------------
+// Imports ----------------------------------------
 import express from "express";
 import database from "./database.js";
 
-// Configure express app -----------------------------
+// Configure express app -------------------------
 const app = new express();
 
-// Query Handler ------------------------------------
-const handleQuery = async (res, sql, params = []) => {
-  try {
-    const [result] = await database.query(sql, params);
-    if (!result || result.length === 0)
-      return res.status(400).json({ message: "No record(s) found." });
-    return res.status(200).json(result);
-  } catch (error) {
-    return res
-      .status(400)
-      .json({ message: `Error executing query: ${error.message}` });
-  }
-};
+// Controllers ------------------------------------
 
+// USERS
 const usersController = async (req, res) => {
-  const uid = req.params.uid;
-  const table = `Users LEFT JOIN UserTypes ON Users.userUserTypeID = UserTypes.userTypeID`;
+  const id = req.params.uid; // undefined for /api/users
+  // Build query ---------------------------------
+  const table =
+    "(Users LEFT JOIN UserTypes ON Users.userUserTypeID = UserTypes.userTypeID)";
+  const whereField = "Users.userID";
   const fields = [
     "Users.userID",
     "Users.userFirstName",
@@ -34,55 +26,202 @@ const usersController = async (req, res) => {
     "Users.userUserTypeID",
     "UserTypes.userTypeName AS userTypeName",
   ];
-  const whereField = "Users.userID = ?";
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (uid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(uid);
+  let sql = `SELECT ${extendedFields} FROM ${extendedTable}`;
+  if (id) sql += ` WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
   }
-  return handleQuery(res, sql, params);
 };
 
+// USER TYPES
 const userTypesController = async (req, res) => {
-  const tid = req.params.tid;
-  const table = `UserTypes`;
+  const id = req.params.tid;
+  // Build query ---------------------------------
+  const table = "UserTypes";
+  const whereField = "userTypeID";
   const fields = ["userTypeID", "userTypeName"];
-  const whereField = "userTypeID = ?";
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (tid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(tid);
+  let sql = `SELECT ${extendedFields} FROM ${extendedTable}`;
+  if (id) sql += ` WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
   }
-  return handleQuery(res, sql, params);
 };
 
+// STATUS
 const statusController = async (req, res) => {
-  const sid = req.params.sid;
-  const table = `Status`;
+  const id = req.params.sid;
+  // Build query ---------------------------------
+  const table = "Status";
+  const whereField = "statusID";
   const fields = ["statusID", "statusName"];
-  const whereField = "statusID = ?";
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (sid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(sid);
+  let sql = `SELECT ${extendedFields} FROM ${extendedTable}`;
+  if (id) sql += ` WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
   }
-  return handleQuery(res, sql, params);
 };
 
-const assignmentBase = {
-  table: `
-    (Assignments
-      LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
-      LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID   = Patient.userID
-      LEFT JOIN Status ON Assignments.assignmentStatusID    = Status.statusID)
-  `,
-  fields: [
+// ASSIGNMENTS
+const assignmentsController = async (req, res) => {
+  const id = req.params.aid;
+  // Build query ---------------------------------
+  const table = `(Assignments
+    LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
+    LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID = Patient.userID
+    LEFT JOIN Status ON Assignments.assignmentStatusID = Status.statusID)`;
+  const whereField = "Assignments.assignmentID";
+  const fields = [
+    "Assignments.assignmentID",
+    "Assignments.assignmentTherapistID",
+    'CONCAT(Therapist.userFirstName, " ", Therapist.userLastName) AS therapistName',
+    "Assignments.assignmentPatientID",
+    'CONCAT(Patient.userFirstName, " ", Patient.userLastName) AS patientName',
+    "Assignments.assignmentStatusID",
+    "Statuses.statusName AS statusName",
+    "Assignments.assignmentAssignedAt",
+  ];
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
+
+  let sql = `SELECT ${extendedFields} FROM ${extendedTable}`;
+  if (id) sql += ` WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
+  }
+};
+
+// ASSIGNMENTS by therapist -----------------------
+const assignmentsByTherapistController = async (req, res) => {
+  const id = req.params.uid;
+  // Build query ---------------------------------
+  const table = `(Assignments
+    LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
+    LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID = Patient.userID
+    LEFT JOIN Status ON Assignments.assignmentStatusID = Status.statusID)`;
+  const whereField = "Assignments.assignmentTherapistID";
+  const fields = [
+    "Assignments.assignmentID",
+    "Assignments.assignmentTherapistID",
+    'CONCAT(Therapist.userFirstName, " ", Therapist.userLastName) AS therapistName',
+    "Assignments.assignmentPatientID",
+    'CONCAT(Patient.userFirstName, " ", Patient.userLastName) AS patientName',
+    "Assignments.assignmentStatusID",
+    "Statuses.statusName AS statusName",
+    "Assignments.assignmentAssignedAt",
+  ];
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
+
+  const sql = `SELECT ${extendedFields} FROM ${extendedTable} WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
+  }
+};
+
+// ASSIGNMENTS by patient -------------------------
+const assignmentsByPatientController = async (req, res) => {
+  const id = req.params.uid;
+  // Build query ---------------------------------
+  const table = `(Assignments
+    LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
+    LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID = Patient.userID
+    LEFT JOIN Status ON Assignments.assignmentStatusID = Status.statusID)`;
+  const whereField = "Assignments.assignmentPatientID";
+  const fields = [
     "Assignments.assignmentID",
     "Assignments.assignmentTherapistID",
     'CONCAT(Therapist.userFirstName, " ", Therapist.userLastName) AS therapistName',
@@ -91,48 +230,79 @@ const assignmentBase = {
     "Assignments.assignmentStatusID",
     "Status.statusName AS statusName",
     "Assignments.assignmentAssignedAt",
-  ],
-};
+  ];
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
 
-const assignmentsController = async (req, res) => {
-  const aid = req.params.aid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentID = ?";
+  const sql = `SELECT ${extendedFields} FROM ${extendedTable} WHERE ${whereField} = ${id}`;
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (aid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(aid);
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
   }
-  return handleQuery(res, sql, params);
 };
 
-const assignmentsByTherapistController = async (req, res) => {
-  const uid = req.params.uid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentTherapistID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [uid]);
-};
-
-const assignmentsByPatientController = async (req, res) => {
-  const uid = req.params.uid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentPatientID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [uid]);
-};
-
+// ASSIGNMENTS
 const assignmentsByStatusController = async (req, res) => {
-  const sid = req.params.sid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentStatusID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [sid]);
+  const id = req.params.sid;
+  // Build query ---------------------------------
+  const table = `(Assignments
+    LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
+    LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID = Patient.userID
+    LEFT JOIN status ON Assignments.assignmentStatusID = Status.statusID)`;
+  const whereField = "Assignments.assignmentStatusID";
+  const fields = [
+    "Assignments.assignmentID",
+    "Assignments.assignmentTherapistID",
+    'CONCAT(Therapist.userFirstName, " ", Therapist.userLastName) AS therapistName',
+    "Assignments.assignmentPatientID",
+    'CONCAT(Patient.userFirstName, " ", Patient.userLastName) AS patientName',
+    "Assignments.assignmentStatusID",
+    "Status.statusName AS statusName",
+    "Assignments.assignmentAssignedAt",
+  ];
+  const extendedTable = `${table}`;
+  const extendedFields = `${fields}`;
+
+  const sql = `SELECT ${extendedFields} FROM ${extendedTable} WHERE ${whereField} = ${id}`;
+
+  // Execute query -------------------------------
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No record(s) found.";
+    else {
+      isSuccess = true;
+      message = "Record(s) retrieved successfully.";
+    }
+    isSuccess
+      ? res.status(200).json(result)
+      : res.status(400).json({ message });
+  } catch (error) {
+    message = `Error executing query: ${error.message}`;
+    res.status(400).json({ message });
+  }
 };
 
-// Endpoints ---------------------------------------
+// Endpoints --------------------------------------
 app.get("/api/users", usersController);
 app.get("/api/users/:uid", usersController);
 
@@ -149,6 +319,6 @@ app.get("/api/assignments/therapist/:uid", assignmentsByTherapistController);
 app.get("/api/assignments/patient/:uid", assignmentsByPatientController);
 app.get("/api/assignments/status/:sid", assignmentsByStatusController);
 
-// Start server ---------------------------------------
+// Start server -----------------------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
