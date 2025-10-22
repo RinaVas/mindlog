@@ -79,8 +79,8 @@ const assignmentBase = {
   table: `
     (Assignments
       LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
-      LEFT JOIN Users AS Patient   ON Assignments.assignmentPatientID   = Patient.userID
-      LEFT JOIN Status           ON Assignments.assignmentStatusID    = Status.statusID)
+      LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID   = Patient.userID
+      LEFT JOIN Status ON Assignments.assignmentStatusID    = Status.statusID)
   `,
   fields: [
     "Assignments.assignmentID",
