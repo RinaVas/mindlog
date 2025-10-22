@@ -1,28 +1,36 @@
-// Imports -------------------------------------------
+// Imports ----------------------------------------
 import express from "express";
 import database from "./database.js";
 
-// Configure express app -----------------------------
+// Configure express app -------------------------
 const app = new express();
 
-// Query Handler ------------------------------------
-const handleQuery = async (res, sql, params = []) => {
+// Controllers ------------------------------------
+
+const read = async (selectSql) => {
   try {
-    const [result] = await database.query(sql, params);
-    if (!result || result.length === 0)
-      return res.status(400).json({ message: "No record(s) found." });
-    return res.status(200).json(result);
+    const [result] = await database.query(selectSql);
+    return result.length === 0
+      ? { isSuccess: false, result: null, message: "No record(s) found" }
+      : {
+          isSuccess: true,
+          result: result,
+          message: "Record(s) successfully recovered",
+        };
   } catch (error) {
-    return res
-      .status(400)
-      .json({ message: `Error executing query: ${error.message}` });
+    return {
+      isSuccess: false,
+      result: null,
+      message: `Failed to execute query: ${error.message}`,
+    };
   }
 };
 
-const usersController = async (req, res) => {
-  const uid = req.params.uid;
-  const table = `Users LEFT JOIN UserTypes ON Users.userUserTypeID = UserTypes.userTypeID`;
-  const fields = [
+const buildUsersSelectSql = (id, variant) => {
+  let sql = "";
+  let table =
+    "(Users LEFT JOIN UserTypes ON Users.userUserTypeID = UserTypes.userTypeID)";
+  let fields = [
     "Users.userID",
     "Users.userFirstName",
     "Users.userLastName",
@@ -34,55 +42,49 @@ const usersController = async (req, res) => {
     "Users.userUserTypeID",
     "UserTypes.userTypeName AS userTypeName",
   ];
-  const whereField = "Users.userID = ?";
-
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (uid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(uid);
+  switch (variant) {
+    default:
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE Users.UserID = ${id}`;
   }
-  return handleQuery(res, sql, params);
+  return sql;
 };
 
-const userTypesController = async (req, res) => {
-  const tid = req.params.tid;
-  const table = `UserTypes`;
+const buildUserTypesSelectSql = (id, variant) => {
+  let sql = "";
+  const table = "UserTypes";
   const fields = ["userTypeID", "userTypeName"];
-  const whereField = "userTypeID = ?";
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (tid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(tid);
+  switch (variant) {
+    default:
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE userTypeID = ${id}`;
   }
-  return handleQuery(res, sql, params);
+
+  return sql;
 };
 
-const statusController = async (req, res) => {
-  const sid = req.params.sid;
-  const table = `Status`;
+const buildStatusSelectSql = (id, variant) => {
+  let sql = "";
+  const table = "Status";
   const fields = ["statusID", "statusName"];
-  const whereField = "statusID = ?";
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (sid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(sid);
+  switch (variant) {
+    default:
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE statusID = ${id}`;
   }
-  return handleQuery(res, sql, params);
+
+  return sql;
 };
 
-const assignmentBase = {
-  table: `
-    (Assignments
-      LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
-      LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID   = Patient.userID
-      LEFT JOIN Status ON Assignments.assignmentStatusID    = Status.statusID)
-  `,
-  fields: [
+const buildAssignmentsSelectSql = (id, variant) => {
+  let sql = "";
+  const table = `(Assignments
+    LEFT JOIN Users AS Therapist ON Assignments.assignmentTherapistID = Therapist.userID
+    LEFT JOIN Users AS Patient ON Assignments.assignmentPatientID = Patient.userID
+    LEFT JOIN Status ON Assignments.assignmentStatusID = Status.statusID)`;
+  const fields = [
     "Assignments.assignmentID",
     "Assignments.assignmentTherapistID",
     'CONCAT(Therapist.userFirstName, " ", Therapist.userLastName) AS therapistName',
@@ -91,64 +93,111 @@ const assignmentBase = {
     "Assignments.assignmentStatusID",
     "Status.statusName AS statusName",
     "Assignments.assignmentAssignedAt",
-  ],
-};
+  ];
 
-const assignmentsController = async (req, res) => {
-  const aid = req.params.aid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentID = ?";
+  switch (variant) {
+    case "therapist":
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE Assignments.assignmentTherapistID = ${id}`;
+      break;
 
-  let sql = `SELECT ${fields} FROM ${table}`;
-  const params = [];
-  if (aid) {
-    sql += ` WHERE ${whereField}`;
-    params.push(aid);
+    case "patient":
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE Assignments.assignmentPatientID = ${id}`;
+      break;
+
+    case "status":
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE Assignments.assignmentStatusID = ${id}`;
+      break;
+
+    default:
+      sql = `SELECT ${fields} FROM ${table}`;
+      if (id) sql += ` WHERE Assignments.assignmentID = ${id}`;
   }
-  return handleQuery(res, sql, params);
+
+  return sql;
 };
 
-const assignmentsByTherapistController = async (req, res) => {
-  const uid = req.params.uid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentTherapistID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [uid]);
+// USERS
+const getUsersController = async (req, res, variant) => {
+  const id = req.params.id; // undefined for /api/users
+  // Build query ---------------------------------
+  const sql = buildUsersSelectSql(id, variant);
+  // Access data -------------------------------
+  const { isSuccess, result, message } = await read(sql);
+  if (!isSuccess) return res.status(404).json({ message });
+  // Response to request
+  res.status(200).json(result);
 };
 
-const assignmentsByPatientController = async (req, res) => {
-  const uid = req.params.uid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentPatientID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [uid]);
+// USER TYPES
+const getUserTypesController = async (req, res, variant) => {
+  const id = req.params.id;
+  // Build query ---------------------------------
+  const sql = buildUserTypesSelectSql(id, variant);
+  // Access data -------------------------------
+  const { isSuccess, result, message } = await read(sql);
+  if (!isSuccess) return res.status(404).json({ message });
+  // Response to request
+  res.status(200).json(result);
 };
 
-const assignmentsByStatusController = async (req, res) => {
-  const sid = req.params.sid;
-  const { table, fields } = assignmentBase;
-  const whereField = "Assignments.assignmentStatusID = ?";
-  const sql = `SELECT ${fields} FROM ${table} WHERE ${whereField}`;
-  return handleQuery(res, sql, [sid]);
+// STATUS
+const getStatusController = async (req, res, variant) => {
+  const id = req.params.id;
+  // Build query ---------------------------------
+  const sql = buildStatusSelectSql(id, variant);
+  // Access data -------------------------------
+  const { isSuccess, result, message } = await read(sql);
+  if (!isSuccess) return res.status(404).json({ message });
+  // Response to request
+  res.status(200).json(result);
 };
 
-// Endpoints ---------------------------------------
-app.get("/api/users", usersController);
-app.get("/api/users/:uid", usersController);
+// ASSIGNMENTS
+const getAssignmentsController = async (req, res, variant) => {
+  const id = req.params.id;
+  // Build query ---------------------------------
+  const sql = buildAssignmentsSelectSql(id, variant);
+  // Access data -------------------------------
+  const { isSuccess, result, message } = await read(sql);
+  if (!isSuccess) return res.status(404).json({ message });
+  // Response to request
+  res.status(200).json(result);
+};
 
-app.get("/api/user-types", userTypesController);
-app.get("/api/user-types/:tid", userTypesController);
+// Endpoints --------------------------------------
+app.get("/api/users", (req, res) => getUsersController(req, res, null));
+app.get("/api/users/:id", (req, res) => getUsersController(req, res, null));
 
-app.get("/api/status", statusController);
-app.get("/api/status/:sid", statusController);
+app.get("/api/user-types", (req, res) =>
+  getUserTypesController(req, res, null)
+);
+app.get("/api/user-types/:id", (req, res) =>
+  getUserTypesController(req, res, null)
+);
 
-app.get("/api/assignments", assignmentsController);
-app.get("/api/assignments/:aid", assignmentsController);
+app.get("/api/status", (req, res) => getStatusController(req, res, null));
+app.get("/api/status/:id", (req, res) => getStatusController(req, res, null));
 
-app.get("/api/assignments/therapist/:uid", assignmentsByTherapistController);
-app.get("/api/assignments/patient/:uid", assignmentsByPatientController);
-app.get("/api/assignments/status/:sid", assignmentsByStatusController);
+app.get("/api/assignments", (req, res) =>
+  getAssignmentsController(req, res, null)
+);
+app.get("/api/assignments/:id", (req, res) =>
+  getAssignmentsController(req, res, null)
+);
 
-// Start server ---------------------------------------
+app.get("/api/assignments/therapist/:id", (req, res) =>
+  getAssignmentsController(req, res, "therapist")
+);
+app.get("/api/assignments/patient/:id", (req, res) =>
+  getAssignmentsController(req, res, "patient")
+);
+app.get("/api/assignments/status/:id", (req, res) =>
+  getAssignmentsController(req, res, "status")
+);
+
+// Start server -----------------------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
